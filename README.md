@@ -139,7 +139,7 @@ The app is containerized with `Dockerfile` and configured via `render.yaml` (Ren
 
 | Variable | Description |
 |----------|-------------|
-| `OLLAMA_REMOTE_HOST` | URL of your remote Ollama server (e.g. `http://your-server:11434`) |
+| `DASHSCOPE_API_KEY` | API key from [DashScope](https://dashscope.console.aliyun.com/) for Qwen-VL cloud inference |
 | `FORMSPREE_ENDPOINT` | Your Formspree form endpoint for email delivery |
 
 **GitHub secret needed:**
@@ -148,15 +148,16 @@ The app is containerized with `Dockerfile` and configured via `render.yaml` (Ren
 |--------|-------------|
 | `RENDER_DEPLOY_HOOK_URL` | Deploy hook URL from Render dashboard (Settings > Deploy Hook) |
 
-### Ollama Host Auto-Detection
+### Vision Backend Auto-Detection
 
-The app automatically detects which Ollama server to use:
+The app automatically detects which vision LLM backend to use:
 
-1. If `OLLAMA_HOST` env var is set, uses that directly
-2. If local Ollama (`localhost:11434`) is reachable, uses local
-3. Otherwise falls back to `OLLAMA_REMOTE_HOST` env var
+1. If `VISION_BACKEND` env var is set (`ollama` or `dashscope`), uses that directly
+2. If local Ollama (`localhost:11434`) is reachable, uses local Ollama
+3. If `DASHSCOPE_API_KEY` is set, uses DashScope cloud API (Qwen-VL-Max)
+4. If `OLLAMA_REMOTE_HOST` is set, uses remote Ollama
 
-This means no configuration is needed for local development -- just have Ollama running.
+For local development, just have Ollama running -- no configuration needed. For cloud deployment (Render), set `DASHSCOPE_API_KEY` to use Alibaba Cloud's Qwen-VL model without running your own GPU server.
 
 ### Email Delivery
 

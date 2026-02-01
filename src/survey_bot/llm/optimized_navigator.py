@@ -800,44 +800,19 @@ HAS_NEXT: yes
 NOW SCAN THE ENTIRE PAGE, FIND ALL UNANSWERED QUESTIONS, AND LIST ALL ACTIONS:"""
     
     async def _call_vision_llm(self, prompt: str, image_b64: str) -> str:
-        """Call Ollama with optimized timeout."""
+        """Call vision model. Routes to Ollama or DashScope automatically."""
+        from .ollama_host import call_vision_llm
 
-        timeout = httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0)
-
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(
-                f"{self.host}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "images": [image_b64],
-                    "stream": False,
-                    "options": {
-                        "num_predict": 800,  # Increased to allow for thinking + response
-                        "temperature": 0.1,  # Low temperature for consistent responses
-                    }
-                }
-            )
-
-            if response.status_code != 200:
-                logger.error(f"[OLLAMA ERROR] Status {response.status_code}: {response.text}")
-                raise Exception(f"Ollama error: {response.status_code}")
-
-            result = response.json()
-            model_response = result.get("response", "")
-
-            # CRITICAL FIX: Some models output to 'thinking' field instead of 'response'
-            # Check if response is empty but thinking has content
-            if not model_response or len(model_response.strip()) == 0:
-                thinking = result.get("thinking", "")
-                if thinking and len(thinking.strip()) > 0:
-                    logger.warning(f"[OLLAMA FIX] Response was empty, using 'thinking' field ({len(thinking)} chars)")
-                    model_response = thinking
-                else:
-                    logger.error(f"[OLLAMA ERROR] Both response and thinking are empty! Full result: {result}")
-
-            logger.debug(f"[OLLAMA] Model returned {len(model_response)} chars")
-            return model_response
+        result = await call_vision_llm(
+            prompt=prompt,
+            image_b64=image_b64,
+            model=self.model,
+            host=self.host,
+            temperature=0.1,
+            max_tokens=800,
+        )
+        logger.debug(f"[VISION] Model returned {len(result)} chars")
+        return result
     
     def _parse_batch_response(self, response: str) -> PageAnalysis:
         """Parse batch response into PageAnalysis."""
@@ -1463,19 +1438,24 @@ async def run_optimized_navigation(
     """
     from ..browser.interactor import PageInteractor
     
-    # Pre-flight Ollama check
-    from .ollama_host import detect_ollama_host_async
-    ollama_host = await detect_ollama_host_async()
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            await client.get(f"{ollama_host}/api/tags")
-    except Exception:
-        return {
-            "is_complete": False,
-            "error": "Ollama not running. Start with: ollama serve",
-            "current_step": 0,
-            "actions_taken": [],
-        }
+    # Pre-flight vision backend check
+    from .ollama_host import detect_backend_async, detect_ollama_host_async
+    backend = await detect_backend_async()
+
+    if backend == "ollama":
+        ollama_host = await detect_ollama_host_async()
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                await client.get(f"{ollama_host}/api/tags")
+        except Exception:
+            return {
+                "is_complete": False,
+                "error": "Vision backend not available. Start Ollama or set DASHSCOPE_API_KEY.",
+                "current_step": 0,
+                "actions_taken": [],
+            }
+    else:
+        logger.info("Using DashScope backend, skipping Ollama health check")
     
     navigator = OptimizedVisionNavigator(mood=mood, email=email)
     interactor = PageInteractor()

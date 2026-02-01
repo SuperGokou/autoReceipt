@@ -180,53 +180,21 @@ Now analyze the screenshot and respond with your action:"""
         return prompt
 
     async def _call_vision_llm(self, prompt: str, image_b64: str) -> str:
-        """Call Ollama vision model with retry logic."""
+        """Call vision model with retry logic. Routes to Ollama or DashScope."""
+        from .ollama_host import call_vision_llm
 
         max_retries = 3
         last_error = None
 
         for attempt in range(max_retries):
             try:
-                # Use longer timeout for vision model (images take time)
-                timeout = httpx.Timeout(
-                    connect=10.0,  # Connection timeout
-                    read=120.0,  # Read timeout (vision model can be slow)
-                    write=30.0,  # Write timeout
-                    pool=10.0,  # Pool timeout
+                logger.debug(f"Calling vision LLM (attempt {attempt + 1}/{max_retries})...")
+                return await call_vision_llm(
+                    prompt=prompt,
+                    image_b64=image_b64,
+                    model=self.model,
+                    host=self.host,
                 )
-
-                async with httpx.AsyncClient(timeout=timeout) as client:
-                    # First check if Ollama is running
-                    if attempt == 0:
-                        try:
-                            health = await client.get(f"{self.host}/api/tags")
-                            if health.status_code != 200:
-                                logger.warning(f"Ollama may not be running: {health.status_code}")
-                        except Exception as e:
-                            logger.error(f"Cannot connect to Ollama at {self.host}. Is it running?")
-                            logger.error(f"Start Ollama with: ollama serve")
-                            raise Exception(f"Ollama not running at {self.host}. Run 'ollama serve' first.")
-
-                    logger.debug(f"Calling Ollama (attempt {attempt + 1}/{max_retries})...")
-
-                    response = await client.post(
-                        f"{self.host}/api/generate",
-                        json={
-                            "model": self.model,
-                            "prompt": prompt,
-                            "images": [image_b64],
-                            "stream": False,
-                        }
-                    )
-
-                    if response.status_code == 404:
-                        raise Exception(f"Model '{self.model}' not found. Run: ollama pull {self.model}")
-
-                    if response.status_code != 200:
-                        raise Exception(f"Ollama API error: {response.status_code} - {response.text}")
-
-                    data = response.json()
-                    return data.get("response", "")
 
             except httpx.ConnectError as e:
                 last_error = f"Cannot connect to Ollama at {self.host}. Is it running? Error: {e}"
@@ -548,34 +516,29 @@ async def run_vision_navigation(
     """
     from ..browser.interactor import PageInteractor
 
-    # Pre-flight check: Verify Ollama is running
-    from .ollama_host import detect_ollama_host_async
-    ollama_host = await detect_ollama_host_async()
-    ollama_model = os.environ.get("OLLAMA_VISION_MODEL", "qwen3-vl")
+    # Pre-flight check: Verify vision backend is available
+    from .ollama_host import detect_backend_async, detect_ollama_host_async
+    backend = await detect_backend_async()
 
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            health = await client.get(f"{ollama_host}/api/tags")
-            if health.status_code != 200:
-                raise Exception(f"Ollama returned status {health.status_code}")
-
-            # Check if model is available
-            models = health.json().get("models", [])
-            model_names = [m.get("name", "").split(":")[0] for m in models]
-            if ollama_model not in model_names and f"{ollama_model}:latest" not in [m.get("name", "") for m in models]:
-                logger.warning(f"Model '{ollama_model}' may not be installed. Available: {model_names}")
-
-    except httpx.ConnectError:
-        logger.error(f"Cannot connect to Ollama at {ollama_host}")
-        logger.error("   Make sure Ollama is running: ollama serve")
-        return {
-            "is_complete": False,
-            "error": f"Ollama not running. Start with: ollama serve",
-            "current_step": 0,
-            "actions_taken": [],
-        }
-    except Exception as e:
-        logger.warning(f"Ollama health check warning: {e}")
+    if backend == "ollama":
+        ollama_host = await detect_ollama_host_async()
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                health = await client.get(f"{ollama_host}/api/tags")
+                if health.status_code != 200:
+                    raise Exception(f"Ollama returned status {health.status_code}")
+        except httpx.ConnectError:
+            logger.error(f"Cannot connect to Ollama at {ollama_host}")
+            return {
+                "is_complete": False,
+                "error": "Vision backend not available. Start Ollama or set DASHSCOPE_API_KEY.",
+                "current_step": 0,
+                "actions_taken": [],
+            }
+        except Exception as e:
+            logger.warning(f"Ollama health check warning: {e}")
+    else:
+        logger.info("Using DashScope backend, skipping Ollama health check")
 
     navigator = VisionNavigator(mood=mood, email=email)
     interactor = PageInteractor()

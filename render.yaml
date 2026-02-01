@@ -4,7 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     envVars:
-      - key: OLLAMA_REMOTE_HOST
+      - key: DASHSCOPE_API_KEY
         sync: false
       - key: FORMSPREE_ENDPOINT
         sync: false

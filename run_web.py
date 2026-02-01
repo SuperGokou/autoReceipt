@@ -12,7 +12,8 @@ def open_browser(port: int):
 
 def main():
     parser = argparse.ArgumentParser(description='Run Survey Bot Web UI')
-    parser.add_argument('--port', type=int, default=5000, help='Port to run on (default: 5000)')
+    parser.add_argument('--port', type=int, default=int(os.environ.get('PORT', 5000)),
+                        help='Port to run on (default: 5000, or PORT env var)')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('--no-browser', action='store_true', help='Don\'t open browser automatically')
     args = parser.parse_args()

@@ -300,68 +300,20 @@ class IngestionAgent:
         Returns:
             ReceiptData if URL found, None otherwise.
         """
-        import httpx
+        from ..llm.ollama_host import call_vision_llm
 
         # Read and encode image as base64
         with open(image_path, "rb") as f:
             image_data = base64.b64encode(f.read()).decode("utf-8")
 
-        # Prepare Ollama API request
-        payload = {
-            "model": self.ollama_model,
-            "prompt": VISION_PROMPT,
-            "images": [image_data],
-            "stream": False,
-        }
+        logger.info(f"Calling Vision LLM ({self.ollama_model})...")
 
-        logger.info(f"Calling Ollama Vision LLM ({self.ollama_model})...")
-
-        # Use longer timeout for vision model
-        timeout = httpx.Timeout(
-            connect=10.0,
-            read=120.0,  # Vision models can be slow
-            write=30.0,
-            pool=10.0,
+        response_text = await call_vision_llm(
+            prompt=VISION_PROMPT,
+            image_b64=image_data,
+            model=self.ollama_model,
+            host=self.ollama_host,
         )
-
-        max_retries = 3
-        last_error = None
-
-        for attempt in range(max_retries):
-            try:
-                async with httpx.AsyncClient(timeout=timeout) as client:
-                    response = await client.post(
-                        f"{self.ollama_host}/api/generate",
-                        json=payload,
-                    )
-                    response.raise_for_status()
-                    result = response.json()
-                    break  # Success, exit retry loop
-
-            except httpx.ConnectError as e:
-                last_error = f"Cannot connect to Ollama at {self.ollama_host}. Is Ollama running? Run: ollama serve"
-                logger.error(last_error)
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(2)
-                else:
-                    raise Exception(last_error)
-
-            except httpx.TimeoutException as e:
-                last_error = f"Ollama request timed out (attempt {attempt + 1}). Model may be loading..."
-                logger.warning(last_error)
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(3)
-                else:
-                    raise Exception(last_error)
-
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 404:
-                    raise Exception(f"Model '{self.ollama_model}' not found. Run: ollama pull {self.ollama_model}")
-                logger.error(f"Ollama API error: {e.response.status_code} - {e.response.text}")
-                raise
-
-        # Parse response
-        response_text = result.get("response", "")
         logger.info(f"Vision LLM response:\n{response_text}")
 
         # Extract URL from response

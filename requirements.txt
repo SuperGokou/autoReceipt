@@ -19,6 +19,7 @@ langchain>=0.1.0
 langchain-anthropic>=0.1.0
 langgraph>=0.0.20
 httpx>=0.25.0  # For Ollama API calls
+dashscope>=1.20.0  # For DashScope cloud vision API
 
 # Web UI
 flask>=3.0.0

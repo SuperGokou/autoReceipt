@@ -5,8 +5,6 @@
 
 An end-to-end automation tool that turns grocery receipts into reward coupons. Upload a receipt photo, and autoReceipt handles the rest: extracting the survey URL, completing the feedback form with AI-generated responses, and delivering the coupon code straight to your inbox.
 
-![Architecture](autorecipt.png)
-
 ## Why This Project?
 
 Most fast-food and grocery chains print a survey URL on every receipt, offering a coupon in return for customer feedback. In practice, the surveys are tedious and repetitive, so the vast majority of receipts go to waste along with the rewards they carry.

@@ -1,0 +1,129 @@
+# =============================================================================
+# Survey Automation Bot - Git Ignore
+# =============================================================================
+
+# =============================================================================
+# SENSITIVE FILES - NEVER COMMIT THESE!
+# =============================================================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets.json
+credentials.json
+
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# =============================================================================
+# Testing
+# =============================================================================
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# =============================================================================
+# Claude Code
+# =============================================================================
+.claude/
+
+# =============================================================================
+# IDE / Editor
+# =============================================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# =============================================================================
+# Project Specific
+# =============================================================================
+# User-uploaded receipt images
+receipts/
+uploads/
+
+# Ignore pngs in general, but keep README images and success screenshot
+*.png
+!ScreenShot.png
+!autorecipt.png
+!screenshots/success.png
+
+# Logs
+*.log
+logs/
+
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# =============================================================================
+# OS Generated
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# =============================================================================
+# Jupyter Notebooks
+# =============================================================================
+.ipynb_checkpoints/
+*.ipynb
+
+# =============================================================================
+# Distribution / Packaging
+# =============================================================================
+.Python
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt

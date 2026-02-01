@@ -1,0 +1,34 @@
+# Survey Bot Requirements
+# ========================
+
+# Core dependencies
+pydantic>=2.0.0
+click>=8.0.0
+
+# Browser automation
+playwright>=1.40.0
+
+# Image processing (OCR)
+opencv-python>=4.8.0
+pytesseract>=0.3.10
+pyzbar>=0.1.9
+Pillow>=10.0.0
+
+# LLM integration
+langchain>=0.1.0
+langchain-anthropic>=0.1.0
+langgraph>=0.0.20
+httpx>=0.25.0  # For Ollama API calls
+
+# Web UI
+flask>=3.0.0
+
+# Email
+# (uses built-in smtplib, no extra dependencies)
+
+# Development
+pytest>=8.0.0
+pytest-asyncio>=0.21.0
+
+# Optional: For QR code generation in tests
+qrcode>=7.4.0

@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>autoReceipt | Automated Survey Completion</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ========================================
+           CSS Variables
+           ======================================== */
+        :root {
+            --bg-950: #020617;
+            --bg-900: #0f172a;
+            --bg-800: #1e293b;
+            --bg-700: #334155;
+            --border: #1e293b;
+            --text-white: #ffffff;
+            --text-200: #e2e8f0;
+            --text-300: #cbd5e1;
+            --text-400: #94a3b8;
+            --text-500: #64748b;
+            --text-600: #475569;
+            --cyan-400: #22d3ee;
+            --cyan-500: #06b6d4;
+            --emerald-400: #34d399;
+            --emerald-500: #10b981;
+            --amber-400: #fbbf24;
+            --red-400: #f87171;
+            --radius: 0.75rem;
+            --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+        }
+
+        /* ========================================
+           Reset & Base
+           ======================================== */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-950);
+            color: var(--text-200);
+            min-height: 100vh;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        ::selection { background: rgba(34, 211, 238, 0.3); color: #cffafe; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--bg-700); border-radius: 3px; }
+
+        /* ========================================
+           Header
+           ======================================== */
+        .header {
+            position: fixed; top: 0; left: 0; right: 0; height: 64px;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 2rem;
+            z-index: 40;
+        }
+
+        .header-left { display: flex; align-items: center; gap: 12px; }
+
+        .logo-icon {
+            width: 32px; height: 32px; border-radius: 8px;
+            background: linear-gradient(135deg, var(--cyan-500), var(--emerald-500));
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2);
+        }
+
+        .logo-icon svg { width: 20px; height: 20px; fill: white; stroke: white; }
+
+        .logo-text { font-weight: 700; font-size: 1.125rem; letter-spacing: -0.02em; color: var(--text-white); }
+
+        /* Status Badge */
+        .status-badge {
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 12px; border-radius: 9999px;
+            background: var(--bg-800); border: 1px solid var(--bg-700);
+            font-size: 0.75rem; font-weight: 500;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--text-400);
+        }
+
+        .status-dot.idle { background: var(--text-400); }
+        .status-dot.processing { background: var(--cyan-400); animation: pulse-dot 1s ease-in-out infinite; }
+        .status-dot.success { background: var(--emerald-400); }
+        .status-dot.error { background: var(--red-400); }
+
+        .status-text.idle { color: var(--text-400); }
+        .status-text.processing { color: var(--cyan-400); }
+        .status-text.success { color: var(--emerald-400); }
+        .status-text.error { color: var(--amber-400); }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* ========================================
+           Main Layout
+           ======================================== */
+        .main-layout {
+            padding-top: 80px; padding-bottom: 2rem;
+            padding-left: 2rem; padding-right: 2rem;
+            max-width: 1280px; margin: 0 auto;
+            height: calc(100vh - 16px);
+            display: grid;
+            grid-template-columns: 1fr 1.8fr;
+            gap: 1.5rem;
+        }
+
+        /* ========================================
+           Cards (shared)
+           ======================================== */
+        .card {
+            background: var(--bg-900);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+        }
+
+        .card-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 0.75rem; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--text-400);
+        }
+
+        .card-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--cyan-400);
+            box-shadow: 0 0 10px rgba(34, 211, 238, 0.5);
+        }
+
+        /* ========================================
+           Left Panel
+           ======================================== */
+        .left-panel {
+            display: flex; flex-direction: column; gap: 1.5rem;
+            overflow-y: auto; padding-bottom: 1rem;
+        }
+
+        /* ========================================
+           Upload / URL Tabs
+           ======================================== */
+        .upload-tabs {
+            display: flex; background: var(--bg-800);
+            padding: 4px; border-radius: 8px; width: fit-content;
+        }
+
+        .upload-tab {
+            padding: 6px 16px; font-size: 0.75rem; font-weight: 500;
+            border: none; border-radius: 6px;
+            cursor: pointer; transition: all 0.2s;
+            background: transparent; color: var(--text-400);
+            font-family: var(--font-sans);
+        }
+
+        .upload-tab:hover { color: var(--text-200); }
+        .upload-tab.active { background: var(--bg-700); color: var(--text-white); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+
+        /* File Drop Zone */
+        .drop-zone {
+            position: relative; height: 192px;
+            border: 2px dashed var(--bg-700); border-radius: var(--radius);
+            background: rgba(30, 41, 59, 0.2);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.2s; text-align: center; padding: 1.5rem;
+        }
+
+        .drop-zone:hover { border-color: var(--text-600); background: rgba(30, 41, 59, 0.4); }
+        .drop-zone.dragover { border-color: var(--cyan-400); background: rgba(34, 211, 238, 0.05); }
+
+        .drop-zone.has-file { border-color: var(--emerald-500); background: rgba(16, 185, 129, 0.05); }
+
+        .drop-zone input[type="file"] {
+            position: absolute; inset: 0; opacity: 0; cursor: pointer;
+        }
+
+        .drop-icon {
+            width: 48px; height: 48px; border-radius: 50%;
+            background: var(--bg-800); color: var(--text-400);
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 12px; transition: all 0.3s;
+        }
+
+        .drop-zone:hover .drop-icon { color: var(--cyan-400); transform: scale(1.1); }
+
+        .drop-text { font-size: 0.875rem; font-weight: 500; color: var(--text-300); }
+        .drop-hint { font-size: 0.75rem; color: var(--text-500); margin-top: 4px; }
+
+        .file-selected-name {
+            font-size: 0.875rem; font-weight: 500; color: var(--text-200);
+            max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+
+        .file-selected-icon {
+            width: 48px; height: 48px; border-radius: 50%;
+            background: rgba(16, 185, 129, 0.1); color: var(--emerald-400);
+            display: flex; align-items: center; justify-content: center; margin-bottom: 8px;
+        }
+
+        .file-clear-btn {
+            position: absolute; top: -8px; right: -8px;
+            width: 28px; height: 28px; border-radius: 50%;
+            background: var(--bg-700); color: var(--text-300); border: none;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .file-clear-btn:hover { background: var(--text-600); color: var(--text-white); }
+
+        /* URL Input Row */
+        .url-row { display: flex; gap: 8px; }
+
+        .url-input-wrap {
+            position: relative; flex: 1;
+        }
+
+        .url-input-icon {
+            position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+            color: var(--text-500); display: flex;
+        }
+
+        .url-input {
+            width: 100%; padding: 10px 16px 10px 36px;
+            background: var(--bg-800); border: 1px solid var(--bg-700);
+            border-radius: var(--radius); font-size: 0.875rem;
+            color: var(--text-white); font-family: var(--font-sans);
+            transition: all 0.2s;
+        }
+
+        .url-input::placeholder { color: var(--text-500); }
+        .url-input:focus { outline: none; border-color: var(--cyan-500); box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15); }
+
+        .url-add-btn {
+            padding: 10px 16px; background: var(--bg-700); color: var(--text-white);
+            font-size: 0.875rem; font-weight: 500; border: none; border-radius: var(--radius);
+            cursor: pointer; transition: all 0.2s; font-family: var(--font-sans);
+        }
+
+        .url-add-btn:hover { background: var(--text-600); }
+        .url-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Tab content toggle */
+        .upload-content { display: none; }
+        .upload-content.active { display: block; }
+
+        /* ========================================
+           Mood Selector
+           ======================================== */
+        .mood-grid {
+            display: flex; gap: 12px; width: 100%;
+        }
+
+        .mood-option { flex: 1; position: relative; }
+        .mood-option input { position: absolute; opacity: 0; pointer-events: none; }
+
+        .mood-card {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 16px 8px; border-radius: var(--radius);
+            border: 2px solid var(--bg-700); background: rgba(30, 41, 59, 0.5);
+            cursor: pointer; transition: all 0.2s;
+        }
+
+        .mood-card:hover { border-color: var(--text-500); }
+
+        .mood-card svg { width: 24px; height: 24px; stroke-width: 1.5; }
+
+        .mood-label {
+            margin-top: 8px; font-size: 0.75rem; font-weight: 500;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+
+        /* Checked states */
+        .mood-option input:checked + .mood-card.mood-happy {
+            border-color: var(--emerald-500); color: var(--emerald-400);
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .mood-option input:checked + .mood-card.mood-neutral {
+            border-color: var(--text-400); color: var(--text-200);
+        }
+
+        .mood-option input:checked + .mood-card.mood-angry {
+            border-color: var(--red-400); color: var(--red-400);
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+        }
+
+        /* ========================================
+           Email Input
+           ======================================== */
+        .email-wrap { position: relative; }
+
+        .email-icon {
+            position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+            color: var(--text-500); display: flex;
+        }
+
+        .email-input {
+            width: 100%; padding: 12px 16px 12px 40px;
+            background: var(--bg-800); border: 1px solid var(--bg-700);
+            border-radius: var(--radius); font-size: 0.875rem;
+            color: var(--text-white); font-family: var(--font-sans);
+            transition: all 0.2s;
+        }
+
+        .email-input::placeholder { color: var(--text-500); }
+        .email-input:focus { outline: none; border-color: var(--cyan-500); box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15); }
+
+        /* ========================================
+           Action Button
+           ======================================== */
+        .action-btn {
+            width: 100%; padding: 16px; border: none; border-radius: var(--radius);
+            font-family: var(--font-sans); font-size: 1rem; font-weight: 700;
+            cursor: pointer; transition: all 0.3s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            position: relative; overflow: hidden;
+        }
+
+        .action-btn.idle {
+            background: var(--cyan-500); color: var(--bg-950);
+            box-shadow: 0 4px 20px rgba(6, 182, 212, 0.25);
+        }
+
+        .action-btn.idle:hover { background: var(--cyan-400); transform: translateY(-1px); box-shadow: 0 8px 30px rgba(6, 182, 212, 0.35); }
+
+        .action-btn.processing {
+            background: var(--bg-800); color: var(--text-500); cursor: not-allowed;
+        }
+
+        .action-btn.success {
+            background: var(--emerald-500); color: var(--text-white);
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.25);
+        }
+
+        .action-btn.success:hover { background: var(--emerald-400); }
+
+        .action-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+        .action-btn svg { width: 20px; height: 20px; }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .spin { animation: spin 1s linear infinite; }
+
+        /* ========================================
+           Right Panel
+           ======================================== */
+        .right-panel {
+            display: flex; flex-direction: column; gap: 1.5rem;
+            height: 100%; min-height: 0;
+        }
+
+        /* ========================================
+           Stepper
+           ======================================== */
+        .stepper { display: flex; align-items: center; justify-content: space-between; position: relative; }
+
+        .stepper-track {
+            position: absolute; top: 50%; left: 0; right: 0;
+            height: 2px; background: var(--bg-800);
+            transform: translateY(-50%); z-index: 0;
+        }
+
+        .stepper-progress {
+            position: absolute; top: 50%; left: 0;
+            height: 2px; background: rgba(6, 182, 212, 0.5);
+            transform: translateY(-50%); z-index: 0;
+            transition: width 0.5s ease;
+        }
+
+        .step {
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+            position: relative; z-index: 1;
+        }
+
+        .step-circle {
+            width: 24px; height: 24px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            border: 2px solid var(--bg-700);
+            background: var(--bg-900); color: var(--bg-700);
+            transition: all 0.3s;
+        }
+
+        .step-circle svg { width: 14px; height: 14px; }
+
+        .step.completed .step-circle {
+            background: rgba(16, 185, 129, 0.1); border-color: var(--emerald-500); color: var(--emerald-500);
+        }
+
+        .step.active .step-circle {
+            background: rgba(34, 211, 238, 0.1); border-color: var(--cyan-500); color: var(--cyan-400);
+            box-shadow: 0 0 15px rgba(34, 211, 238, 0.4);
+        }
+
+        .step.active .step-circle svg { animation: pulse-dot 1s ease-in-out infinite; }
+
+        .step-label {
+            font-size: 0.7rem; font-weight: 500;
+            text-transform: uppercase; letter-spacing: 0.08em;
+            transition: color 0.3s;
+        }
+
+        .step.completed .step-label { color: var(--text-400); }
+        .step.active .step-label { color: var(--cyan-400); }
+        .step.pending .step-label { color: var(--text-600); }
+
+        /* ========================================
+           Terminal & Preview Grid
+           ======================================== */
+        .feedback-grid {
+            flex: 1; display: grid; grid-template-columns: 1fr 1fr;
+            gap: 1.5rem; min-height: 0;
+        }
+
+        /* Terminal */
+        .terminal {
+            display: flex; flex-direction: column;
+            background: var(--bg-950); border: 1px solid var(--border); border-radius: var(--radius);
+            overflow: hidden; font-family: var(--font-mono); font-size: 0.8125rem;
+        }
+
+        .terminal-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 16px; background: var(--bg-900); border-bottom: 1px solid var(--border);
+        }
+
+        .terminal-header-left {
+            display: flex; align-items: center; gap: 8px; color: var(--text-400);
+        }
+
+        .terminal-header-left svg { width: 16px; height: 16px; }
+
+        .terminal-header-left span {
+            font-size: 0.7rem; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.08em;
+        }
+
+        .terminal-dots { display: flex; gap: 6px; }
+        .terminal-dots span { width: 10px; height: 10px; border-radius: 50%; background: var(--bg-700); }
+
+        .terminal-body {
+            flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 6px;
+        }
+
+        .terminal-empty {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            color: var(--text-600); opacity: 0.5; font-size: 0.8125rem;
+        }
+
+        .log-line {
+            display: flex; align-items: flex-start; gap: 12px;
+            animation: logFadeIn 0.2s ease;
+        }
+
+        @keyframes logFadeIn {
+            from { opacity: 0; transform: translateX(-8px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .log-time { color: var(--text-600); font-size: 0.625rem; flex-shrink: 0; padding-top: 2px; }
+        .log-arrow { color: var(--text-600); margin-right: 4px; }
+        .log-msg { word-break: break-all; }
+        .log-msg.info { color: var(--text-300); }
+        .log-msg.success { color: var(--emerald-400); }
+        .log-msg.warning { color: var(--amber-400); }
+        .log-msg.error { color: var(--red-400); }
+
+        /* Preview */
+        .preview {
+            background: var(--bg-950); border: 1px solid var(--border); border-radius: var(--radius);
+            overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center;
+        }
+
+        .preview-label {
+            position: absolute; top: 16px; left: 16px; z-index: 10;
+            background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px);
+            padding: 4px 12px; border-radius: 9999px;
+            font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-300);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .preview-empty {
+            display: flex; flex-direction: column; align-items: center; gap: 16px;
+            color: var(--text-600);
+        }
+
+        .preview-empty-box {
+            width: 64px; height: 64px; border: 2px dashed var(--bg-800);
+            border-radius: 8px; opacity: 0.5;
+        }
+
+        .preview-empty p { font-size: 0.875rem; }
+
+        .preview-active-overlay {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .preview-active-text {
+            color: var(--cyan-400); font-family: var(--font-mono); font-size: 0.875rem;
+            background: rgba(0, 0, 0, 0.8); padding: 8px 16px; border-radius: 6px;
+            border: 1px solid rgba(6, 182, 212, 0.3);
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        /* ========================================
+           Success Modal
+           ======================================== */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px);
+            z-index: 50; align-items: center; justify-content: center; padding: 1rem;
+        }
+
+        .modal-overlay.visible { display: flex; }
+
+        .modal {
+            width: 100%; max-width: 420px;
+            background: var(--bg-900); border: 1px solid var(--bg-700);
+            border-radius: 1rem; padding: 1.5rem;
+            position: relative; overflow: hidden;
+            animation: modalIn 0.3s ease;
+        }
+
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.95) translateY(16px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .modal-glow {
+            position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, var(--cyan-400), var(--emerald-400), var(--cyan-400));
+            background-size: 200% 100%;
+            animation: gradient-shift 2s ease infinite;
+        }
+
+        @keyframes gradient-shift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .modal-close {
+            position: absolute; top: 16px; right: 16px;
+            background: none; border: none; color: var(--text-500);
+            cursor: pointer; transition: color 0.2s; padding: 4px;
+        }
+
+        .modal-close:hover { color: var(--text-white); }
+        .modal-close svg { width: 20px; height: 20px; }
+
+        .modal-body { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1.5rem; padding-top: 1rem; }
+
+        .modal-icon {
+            width: 64px; height: 64px; border-radius: 50%;
+            background: rgba(16, 185, 129, 0.1); color: var(--emerald-400);
+            display: flex; align-items: center; justify-content: center;
+            ring: 1px; border: 1px solid rgba(16, 185, 129, 0.5);
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.3);
+        }
+
+        .modal-icon svg { width: 32px; height: 32px; }
+
+        .modal-title { font-size: 1.5rem; font-weight: 700; color: var(--text-white); }
+        .modal-desc { color: var(--text-400); font-size: 0.9rem; margin-top: -8px; }
+
+        .coupon-box {
+            width: 100%; background: var(--bg-950); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 1rem;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+
+        .coupon-code {
+            font-family: var(--font-mono); font-size: 1.25rem; font-weight: 700;
+            color: var(--emerald-400); letter-spacing: 0.05em;
+        }
+
+        .copy-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 12px; border-radius: 8px;
+            font-size: 0.875rem; font-weight: 500;
+            border: none; cursor: pointer; transition: all 0.2s;
+            background: var(--bg-800); color: var(--text-300);
+            font-family: var(--font-sans);
+        }
+
+        .copy-btn:hover { background: var(--bg-700); color: var(--text-white); }
+        .copy-btn.copied { background: var(--emerald-500); color: var(--text-white); }
+        .copy-btn svg { width: 16px; height: 16px; }
+
+        .modal-meta {
+            font-size: 0.8rem; color: var(--text-500);
+        }
+
+        .modal-reset-btn {
+            width: 100%; padding: 12px; background: var(--bg-800);
+            border: 1px solid var(--bg-700); border-radius: var(--radius);
+            color: var(--text-white); font-weight: 500; font-size: 0.9rem;
+            cursor: pointer; transition: all 0.2s; font-family: var(--font-sans);
+        }
+
+        .modal-reset-btn:hover { background: var(--bg-700); }
+
+        /* ========================================
+           Responsive
+           ======================================== */
+        @media (max-width: 900px) {
+            .main-layout { grid-template-columns: 1fr; height: auto; padding: 80px 1rem 1rem; }
+            .right-panel { display: none; }
+            .header { padding: 0 1rem; }
+
+            /* Show a simplified progress on mobile */
+            .mobile-progress { display: block !important; }
+        }
+
+        .mobile-progress { display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- ===================== HEADER ===================== -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </div>
+            <span class="logo-text">autoReceipt</span>
+        </div>
+        <div class="status-badge">
+            <span class="status-dot idle" id="status-dot"></span>
+            <span class="status-text idle" id="status-text">System Ready</span>
+        </div>
+    </header>
+
+    <!-- ===================== MAIN ===================== -->
+    <div class="main-layout">
+
+        <!-- ========== LEFT PANEL ========== -->
+        <div class="left-panel">
+
+            <!-- Ingestion Card -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Ingestion</span>
+                    <span class="card-dot"></span>
+                </div>
+
+                <div class="upload-tabs">
+                    <button class="upload-tab active" data-target="upload-file">Upload</button>
+                    <button class="upload-tab" data-target="upload-url">URL</button>
+                </div>
+
+                <div class="upload-content active" id="upload-file" style="margin-top: 16px;">
+                    <div class="drop-zone" id="drop-zone">
+                        <input type="file" id="receipt-file" accept="image/*,.pdf">
+                        <div class="drop-icon" id="drop-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        </div>
+                        <p class="drop-text" id="drop-text">Click or drag receipt here</p>
+                        <p class="drop-hint" id="drop-hint">Supports JPG, PNG, PDF</p>
+                    </div>
+                </div>
+
+                <div class="upload-content" id="upload-url" style="margin-top: 16px;">
+                    <div class="url-row">
+                        <div class="url-input-wrap">
+                            <span class="url-input-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                            </span>
+                            <input type="text" class="url-input" id="survey-url" placeholder="https://survey.example.com/feedback">
+                        </div>
+                        <button class="url-add-btn" id="url-add-btn">Add</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Config Card -->
+            <div class="card" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <!-- Persona -->
+                <div>
+                    <div class="card-header"><span class="card-title">Persona</span></div>
+                    <div class="mood-grid">
+                        <label class="mood-option">
+                            <input type="radio" name="mood" value="happy" checked>
+                            <div class="mood-card mood-happy">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                                <span class="mood-label">Happy</span>
+                            </div>
+                        </label>
+                        <label class="mood-option">
+                            <input type="radio" name="mood" value="neutral">
+                            <div class="mood-card mood-neutral">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="15" x2="16" y2="15"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                                <span class="mood-label">Neutral</span>
+                            </div>
+                        </label>
+                        <label class="mood-option">
+                            <input type="radio" name="mood" value="angry">
+                            <div class="mood-card mood-angry">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                                <span class="mood-label">Angry</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Delivery -->
+                <div>
+                    <div class="card-header"><span class="card-title">Delivery</span></div>
+                    <div class="email-wrap">
+                        <span class="email-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                        </span>
+                        <input type="email" class="email-input" id="email-input" placeholder="name@example.com">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile Progress (only shown on small screens) -->
+            <div class="card mobile-progress" id="mobile-progress">
+                <div class="card-header"><span class="card-title">Progress</span></div>
+                <div class="terminal-body" id="mobile-log" style="max-height: 200px; font-family: var(--font-mono); font-size: 0.8rem;"></div>
+            </div>
+
+            <!-- Action Button -->
+            <button class="action-btn idle" id="action-btn" disabled>
+                <span id="btn-text">Start Automation</span>
+                <svg id="btn-icon" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </button>
+        </div>
+
+        <!-- ========== RIGHT PANEL ========== -->
+        <div class="right-panel">
+
+            <!-- Stepper -->
+            <div class="card">
+                <div class="stepper" id="stepper">
+                    <div class="stepper-track"></div>
+                    <div class="stepper-progress" id="stepper-progress"></div>
+                    <div class="step active" data-stage="0">
+                        <div class="step-circle">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="10"/></svg>
+                        </div>
+                        <span class="step-label">Ingestion</span>
+                    </div>
+                    <div class="step pending" data-stage="1">
+                        <div class="step-circle">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                        </div>
+                        <span class="step-label">Supervisor</span>
+                    </div>
+                    <div class="step pending" data-stage="2">
+                        <div class="step-circle">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                        </div>
+                        <span class="step-label">Navigator</span>
+                    </div>
+                    <div class="step pending" data-stage="3">
+                        <div class="step-circle">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                        </div>
+                        <span class="step-label">Fulfillment</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Terminal + Preview -->
+            <div class="feedback-grid">
+                <!-- Terminal -->
+                <div class="terminal">
+                    <div class="terminal-header">
+                        <div class="terminal-header-left">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                            <span>Live Terminal</span>
+                        </div>
+                        <div class="terminal-dots"><span></span><span></span><span></span></div>
+                    </div>
+                    <div class="terminal-body" id="terminal-log">
+                        <div class="terminal-empty">Waiting for process initiation...</div>
+                    </div>
+                </div>
+
+                <!-- Preview -->
+                <div class="preview" id="preview-panel">
+                    <div class="preview-label" id="preview-label">Preview: Ready</div>
+                    <div class="preview-empty" id="preview-empty">
+                        <div class="preview-empty-box"></div>
+                        <p>No input detected</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== SUCCESS MODAL ===================== -->
+    <div class="modal-overlay" id="success-modal">
+        <div class="modal">
+            <div class="modal-glow"></div>
+            <button class="modal-close" id="modal-close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <div class="modal-body">
+                <div class="modal-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+                </div>
+                <div>
+                    <div class="modal-title">Automation Complete!</div>
+                    <p class="modal-desc">The survey has been successfully submitted and a reward coupon was extracted.</p>
+                </div>
+                <div class="coupon-box">
+                    <code class="coupon-code" id="modal-coupon">-</code>
+                    <button class="copy-btn" id="copy-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        <span id="copy-text">Copy</span>
+                    </button>
+                </div>
+                <p class="modal-meta" id="modal-meta"></p>
+                <button class="modal-reset-btn" id="modal-reset-btn">Close & Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== JAVASCRIPT ===================== -->
+    <script>
+        // ── State ──
+        let appStatus = 'idle'; // idle | processing | success | error
+        let currentStage = 0;
+        let selectedFile = null;
+        let selectedUrl = '';
+
+        // ── DOM Refs ──
+        const $ = (s) => document.querySelector(s);
+        const $$ = (s) => document.querySelectorAll(s);
+
+        const statusDot = $('#status-dot');
+        const statusText = $('#status-text');
+        const actionBtn = $('#action-btn');
+        const btnText = $('#btn-text');
+        const btnIcon = $('#btn-icon');
+        const terminalLog = $('#terminal-log');
+        const mobileLog = $('#mobile-log');
+        const dropZone = $('#drop-zone');
+        const fileInput = $('#receipt-file');
+        const dropIcon = $('#drop-icon');
+        const dropText = $('#drop-text');
+        const dropHint = $('#drop-hint');
+        const previewLabel = $('#preview-label');
+        const previewEmpty = $('#preview-empty');
+        const previewPanel = $('#preview-panel');
+        const successModal = $('#success-modal');
+
+        // ── Status Updates ──
+        function setAppStatus(s) {
+            appStatus = s;
+
+            // Badge
+            statusDot.className = 'status-dot ' + s;
+            statusText.className = 'status-text ' + s;
+            statusText.textContent = s === 'idle' ? 'System Ready' : s === 'processing' ? 'Processing' : s === 'success' ? 'Complete' : 'Error';
+
+            // Button
+            actionBtn.className = 'action-btn ' + s;
+            if (s === 'idle') {
+                btnText.textContent = 'Start Automation';
+                btnIcon.style.display = '';
+                btnIcon.classList.remove('spin');
+                actionBtn.disabled = !selectedFile && !selectedUrl;
+            } else if (s === 'processing') {
+                btnText.textContent = 'Processing...';
+                btnIcon.innerHTML = '<path d="M21 12a9 9 0 1 1-6.219-8.56" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>';
+                btnIcon.classList.add('spin');
+                actionBtn.disabled = true;
+            } else if (s === 'success') {
+                btnText.textContent = 'Start New Session';
+                btnIcon.style.display = 'none';
+                actionBtn.disabled = false;
+            }
+
+            // Preview panel
+            previewLabel.textContent = 'Preview: ' + (s === 'idle' ? 'Ready' : s === 'processing' ? 'Live View' : 'Result');
+
+            // Remove old overlay
+            const oldOverlay = previewPanel.querySelector('.preview-active-overlay');
+            if (oldOverlay) oldOverlay.remove();
+
+            const previewImg = previewPanel.querySelector('.preview-img');
+
+            if (s === 'processing') {
+                if (previewImg) { previewImg.style.opacity = '0.4'; previewImg.style.filter = 'blur(4px) scale(1.05)'; }
+                const overlay = document.createElement('div');
+                overlay.className = 'preview-active-overlay';
+                overlay.innerHTML = '<div class="preview-active-text">System Active...</div>';
+                previewPanel.appendChild(overlay);
+            } else if (s === 'success') {
+                if (previewImg) { previewImg.style.opacity = '0.8'; previewImg.style.filter = 'none'; }
+            } else {
+                if (previewImg) { previewImg.style.opacity = '1'; previewImg.style.filter = 'none'; }
+            }
+        }
+
+        // ── Upload Tabs ──
+        $$('.upload-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                $$('.upload-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                $$('.upload-content').forEach(c => c.classList.remove('active'));
+                $('#' + tab.dataset.target).classList.add('active');
+            });
+        });
+
+        // ── File Upload ──
+        ['dragenter', 'dragover'].forEach(ev => {
+            dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        });
+        ['dragleave', 'drop'].forEach(ev => {
+            dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.remove('dragover'); });
+        });
+
+        dropZone.addEventListener('drop', e => {
+            if (e.dataTransfer.files.length > 0) {
+                fileInput.files = e.dataTransfer.files;
+                handleFileSelected(e.dataTransfer.files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) handleFileSelected(fileInput.files[0]);
+        });
+
+        function handleFileSelected(file) {
+            selectedFile = file;
+            dropZone.classList.add('has-file');
+            dropIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
+            dropIcon.style.background = 'rgba(16,185,129,0.1)';
+            dropIcon.style.color = 'var(--emerald-400)';
+            dropText.textContent = file.name;
+            dropText.style.color = 'var(--text-200)';
+            dropHint.textContent = (file.size / 1024).toFixed(1) + ' KB';
+            // Show image preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewEmpty.style.display = 'none';
+                // Remove old preview image
+                const old = previewPanel.querySelector('.preview-img');
+                if (old) old.remove();
+                const img = document.createElement('img');
+                img.className = 'preview-img';
+                img.src = e.target.result;
+                img.alt = 'Receipt Preview';
+                img.style.cssText = 'width:100%;height:100%;object-fit:cover;position:absolute;inset:0;transition:all 0.5s;';
+                previewPanel.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+            setAppStatus('idle');
+        }
+
+        function clearFile() {
+            selectedFile = null;
+            dropZone.classList.remove('has-file');
+            dropIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
+            dropIcon.style.background = 'var(--bg-800)';
+            dropIcon.style.color = 'var(--text-400)';
+            dropText.textContent = 'Click or drag receipt here';
+            dropText.style.color = '';
+            dropHint.textContent = 'Supports JPG, PNG, PDF';
+            previewEmpty.innerHTML = '<div class="preview-empty-box"></div><p>No input detected</p>';
+            previewEmpty.style.display = '';
+            const oldImg = previewPanel.querySelector('.preview-img');
+            if (oldImg) oldImg.remove();
+            fileInput.value = '';
+            setAppStatus('idle');
+        }
+
+        // ── URL Add ──
+        $('#url-add-btn').addEventListener('click', () => {
+            const url = $('#survey-url').value.trim();
+            if (url) {
+                selectedUrl = url;
+                setAppStatus('idle');
+            }
+        });
+
+        // ── Stepper Update ──
+        function updateStepper(stage) {
+            currentStage = stage;
+            const steps = $$('.step');
+            const total = steps.length - 1;
+
+            // Progress bar
+            $('#stepper-progress').style.width = (stage / total * 100) + '%';
+
+            steps.forEach((step, i) => {
+                step.classList.remove('completed', 'active', 'pending');
+                const circle = step.querySelector('.step-circle');
+
+                if (i < stage) {
+                    step.classList.add('completed');
+                    circle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+                } else if (i === stage) {
+                    step.classList.add('active');
+                    circle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="10"/></svg>';
+                } else {
+                    step.classList.add('pending');
+                    circle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
+                }
+            });
+        }
+
+        // ── Terminal Logging ──
+        function addLog(message, type = 'info') {
+            const time = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            // Clear empty state
+            const empty = terminalLog.querySelector('.terminal-empty');
+            if (empty) empty.remove();
+
+            const line = document.createElement('div');
+            line.className = 'log-line';
+            line.innerHTML = `<span class="log-time">${time}</span><span class="log-msg ${type}"><span class="log-arrow">></span> ${escapeHtml(message)}</span>`;
+            terminalLog.appendChild(line);
+            terminalLog.scrollTop = terminalLog.scrollHeight;
+
+            // Mobile log
+            const mLine = line.cloneNode(true);
+            mobileLog.appendChild(mLine);
+            mobileLog.scrollTop = mobileLog.scrollHeight;
+        }
+
+        function escapeHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        // ── Action Button ──
+        actionBtn.addEventListener('click', () => {
+            if (appStatus === 'success') {
+                resetAll();
+                return;
+            }
+            if (appStatus === 'idle') {
+                startAutomation();
+            }
+        });
+
+        // ── Start Automation ──
+        async function startAutomation() {
+            const activeTab = document.querySelector('.upload-tab.active').dataset.target;
+            const mood = document.querySelector('input[name="mood"]:checked').value;
+            const email = $('#email-input').value;
+
+            setAppStatus('processing');
+
+            // Clear logs
+            terminalLog.innerHTML = '';
+            mobileLog.innerHTML = '';
+            updateStepper(0);
+
+            // Hide previous modal
+            successModal.classList.remove('visible');
+
+            let url = '/api/submit';
+            let body, isJson;
+
+            if (activeTab === 'upload-file' && selectedFile) {
+                const formData = new FormData();
+                formData.append('receipt', selectedFile);
+                formData.append('mood', mood);
+                formData.append('email', email);
+                body = formData;
+                isJson = false;
+            } else if (activeTab === 'upload-url' && selectedUrl) {
+                body = JSON.stringify({ survey_url: selectedUrl, mood, email });
+                isJson = true;
+            } else {
+                addLog('No input provided.', 'error');
+                setAppStatus('idle');
+                return;
+            }
+
+            try {
+                const headers = isJson ? { 'Content-Type': 'application/json' } : {};
+                const res = await fetch(url, { method: 'POST', headers, body });
+                const result = await res.json();
+
+                if (!res.ok) throw new Error(result.error || 'Failed to start job');
+
+                listenForUpdates(result.job_id);
+            } catch (err) {
+                addLog(err.message, 'error');
+                setAppStatus('error');
+            }
+        }
+
+        // ── SSE Listener ──
+        function listenForUpdates(jobId) {
+            const es = new EventSource('/api/stream/' + jobId);
+
+            es.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'progress') {
+                    addLog(data.message);
+
+                    // Update stepper based on content
+                    if (data.message.includes('Supervisor')) updateStepper(1);
+                    if (data.message.includes('Navigator')) updateStepper(2);
+                    if (data.message.includes('Coupon code')) updateStepper(3);
+                } else if (data.type === 'complete') {
+                    es.close();
+                    showResult(data);
+                } else if (data.type === 'error') {
+                    es.close();
+                    addLog(data.message, 'error');
+                    setAppStatus('error');
+                }
+            };
+
+            es.onerror = () => {
+                es.close();
+                addLog('Connection lost', 'error');
+                setAppStatus('error');
+            };
+        }
+
+        // ── Show Result ──
+        function showResult(data) {
+            setAppStatus('success');
+
+            if (data.status === 'completed' && data.result) {
+                addLog('Process complete.', 'success');
+
+                const coupon = data.result.coupon_code || 'N/A';
+                $('#modal-coupon').textContent = coupon;
+
+                const meta = [];
+                if (data.result.steps_taken) meta.push(data.result.steps_taken + ' steps');
+                if (data.result.duration) meta.push(data.result.duration.toFixed(1) + 's');
+                if (data.result.email_sent) meta.push('Email sent');
+                $('#modal-meta').textContent = meta.join(' · ');
+
+                successModal.classList.add('visible');
+            } else {
+                addLog(data.error || 'An error occurred', 'error');
+                setAppStatus('error');
+            }
+        }
+
+        // ── Modal Controls ──
+        $('#modal-close').addEventListener('click', () => successModal.classList.remove('visible'));
+        $('#modal-reset-btn').addEventListener('click', () => { successModal.classList.remove('visible'); resetAll(); });
+
+        successModal.addEventListener('click', (e) => {
+            if (e.target === successModal) successModal.classList.remove('visible');
+        });
+
+        $('#copy-btn').addEventListener('click', () => {
+            const code = $('#modal-coupon').textContent;
+            navigator.clipboard.writeText(code);
+            $('#copy-text').textContent = 'Copied';
+            $('#copy-btn').classList.add('copied');
+            setTimeout(() => {
+                $('#copy-text').textContent = 'Copy';
+                $('#copy-btn').classList.remove('copied');
+            }, 2000);
+        });
+
+        // ── Reset ──
+        function resetAll() {
+            setAppStatus('idle');
+            clearFile();
+            selectedUrl = '';
+            $('#survey-url').value = '';
+            $('#email-input').value = '';
+            document.querySelector('input[name="mood"][value="happy"]').checked = true;
+            terminalLog.innerHTML = '<div class="terminal-empty">Waiting for process initiation...</div>';
+            mobileLog.innerHTML = '';
+            updateStepper(0);
+            previewLabel.textContent = 'Preview: Ready';
+        }
+
+        // Init
+        setAppStatus('idle');
+    </script>
+</body>
+</html>

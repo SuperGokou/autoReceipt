@@ -3,6 +3,7 @@ services:
     name: autoReceipt
     runtime: docker
     dockerfilePath: ./Dockerfile
+    dockerCommand: python run_web.py --no-browser
     envVars:
       - key: DASHSCOPE_API_KEY
         sync: false

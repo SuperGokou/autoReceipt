@@ -356,7 +356,18 @@ async def _call_dashscope(
             )
 
             if response.status_code != 200:
-                error_msg = f"{response.status_code} - {response.code} - {response.message}"
+                error_code = getattr(response, "code", "")
+                error_msg = f"{response.status_code} - {error_code} - {response.message}"
+
+                # Free quota exhausted -- skip to next model
+                if "AllocationQuota" in str(error_code) or "FreeTierOnly" in str(error_code):
+                    logger.warning(
+                        "DashScope model %s free quota exhausted, trying next model...",
+                        current_model,
+                    )
+                    last_error = f"{current_model}: free quota exhausted"
+                    continue
+
                 logger.warning("DashScope model %s failed: %s", current_model, error_msg)
                 last_error = error_msg
                 continue

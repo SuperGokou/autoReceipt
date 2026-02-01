@@ -1,6 +1,8 @@
 
 # autoReceipt
 
+**Live Demo:** https://autoreceipt-ql5e.onrender.com
+
 An end-to-end automation tool that turns grocery receipts into reward coupons. Upload a receipt photo, and autoReceipt handles the rest: extracting the survey URL, completing the feedback form with AI-generated responses, and delivering the coupon code straight to your inbox.
 
 ![Architecture](autorecipt.png)

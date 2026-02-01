@@ -13,6 +13,20 @@ _cached_host: Optional[str] = None
 _cached_backend: Optional[str] = None  # "ollama" or "dashscope"
 
 
+def is_running_on_server() -> bool:
+    """Check if running on a cloud server (Render, Docker, etc.) vs local machine."""
+    # Render sets RENDER=true automatically
+    if os.environ.get("RENDER"):
+        return True
+    # Running inside Docker
+    if os.path.exists("/.dockerenv"):
+        return True
+    # Common cloud env vars
+    if any(os.environ.get(v) for v in ("DYNO", "FLY_APP_NAME", "RAILWAY_ENVIRONMENT")):
+        return True
+    return False
+
+
 def _dashscope_configured() -> bool:
     return bool(os.environ.get("DASHSCOPE_API_KEY"))
 
@@ -92,45 +106,57 @@ def detect_backend() -> str:
 
     Priority:
     1. VISION_BACKEND env var (explicit override)
-    2. Local Ollama reachable -> 'ollama'
-    3. DASHSCOPE_API_KEY set -> 'dashscope'
-    4. OLLAMA_REMOTE_HOST set -> 'ollama'
-    5. Default to 'ollama'
+    2. Running on server (Render/Docker) + DASHSCOPE_API_KEY -> 'dashscope'
+    3. Local Ollama reachable -> 'ollama'
+    4. DASHSCOPE_API_KEY set -> 'dashscope'
+    5. OLLAMA_REMOTE_HOST set -> 'ollama'
+    6. Default to 'ollama'
     """
     global _cached_backend
     if _cached_backend is not None:
         return _cached_backend
 
+    on_server = is_running_on_server()
+    env_label = "server" if on_server else "local"
+    logger.info("Environment detected: %s", env_label)
+
     explicit = os.environ.get("VISION_BACKEND", "").lower()
     if explicit in ("ollama", "dashscope"):
         _cached_backend = explicit
-        logger.info("Using explicit VISION_BACKEND: %s", explicit)
+        logger.info("[%s] Using explicit VISION_BACKEND: %s", env_label, explicit)
+        return _cached_backend
+
+    # On server, prefer DashScope (no local Ollama available)
+    if on_server and _dashscope_configured():
+        _cached_backend = "dashscope"
+        logger.info("[%s] Using DashScope backend (cloud deployment)", env_label)
         return _cached_backend
 
     # Try local Ollama
-    try:
-        resp = httpx.get(f"{LOCAL_OLLAMA}/api/tags", timeout=2.0)
-        if resp.status_code == 200:
-            _cached_backend = "ollama"
-            logger.info("Local Ollama detected, using ollama backend")
-            return _cached_backend
-    except Exception:
-        pass
+    if not on_server:
+        try:
+            resp = httpx.get(f"{LOCAL_OLLAMA}/api/tags", timeout=2.0)
+            if resp.status_code == 200:
+                _cached_backend = "ollama"
+                logger.info("[%s] Local Ollama detected, using ollama backend", env_label)
+                return _cached_backend
+        except Exception:
+            pass
 
-    # Check DashScope
+    # Check DashScope fallback
     if _dashscope_configured():
         _cached_backend = "dashscope"
-        logger.info("Using DashScope backend (DASHSCOPE_API_KEY set)")
+        logger.info("[%s] Using DashScope backend (DASHSCOPE_API_KEY set)", env_label)
         return _cached_backend
 
     # Check remote Ollama
     if os.environ.get("OLLAMA_REMOTE_HOST"):
         _cached_backend = "ollama"
-        logger.info("Using remote Ollama backend")
+        logger.info("[%s] Using remote Ollama backend", env_label)
         return _cached_backend
 
     _cached_backend = "ollama"
-    logger.warning("No vision backend detected. Defaulting to ollama.")
+    logger.warning("[%s] No vision backend detected. Defaulting to ollama.", env_label)
     return _cached_backend
 
 
@@ -140,34 +166,48 @@ async def detect_backend_async() -> str:
     if _cached_backend is not None:
         return _cached_backend
 
+    on_server = is_running_on_server()
+    env_label = "server" if on_server else "local"
+    logger.info("Environment detected: %s", env_label)
+
     explicit = os.environ.get("VISION_BACKEND", "").lower()
     if explicit in ("ollama", "dashscope"):
         _cached_backend = explicit
-        logger.info("Using explicit VISION_BACKEND: %s", explicit)
+        logger.info("[%s] Using explicit VISION_BACKEND: %s", env_label, explicit)
         return _cached_backend
 
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(f"{LOCAL_OLLAMA}/api/tags")
-            if resp.status_code == 200:
-                _cached_backend = "ollama"
-                logger.info("Local Ollama detected, using ollama backend")
-                return _cached_backend
-    except Exception:
-        pass
+    # On server, prefer DashScope
+    if on_server and _dashscope_configured():
+        _cached_backend = "dashscope"
+        logger.info("[%s] Using DashScope backend (cloud deployment)", env_label)
+        return _cached_backend
 
+    # Try local Ollama
+    if not on_server:
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                resp = await client.get(f"{LOCAL_OLLAMA}/api/tags")
+                if resp.status_code == 200:
+                    _cached_backend = "ollama"
+                    logger.info("[%s] Local Ollama detected, using ollama backend", env_label)
+                    return _cached_backend
+        except Exception:
+            pass
+
+    # Check DashScope fallback
     if _dashscope_configured():
         _cached_backend = "dashscope"
-        logger.info("Using DashScope backend (DASHSCOPE_API_KEY set)")
+        logger.info("[%s] Using DashScope backend (DASHSCOPE_API_KEY set)", env_label)
         return _cached_backend
 
+    # Check remote Ollama
     if os.environ.get("OLLAMA_REMOTE_HOST"):
         _cached_backend = "ollama"
-        logger.info("Using remote Ollama backend")
+        logger.info("[%s] Using remote Ollama backend", env_label)
         return _cached_backend
 
     _cached_backend = "ollama"
-    logger.warning("No vision backend detected. Defaulting to ollama.")
+    logger.warning("[%s] No vision backend detected. Defaulting to ollama.", env_label)
     return _cached_backend
 
 

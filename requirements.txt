@@ -32,3 +32,5 @@ pytest-asyncio>=0.21.0
 
 # Optional: For QR code generation in tests
 qrcode>=7.4.0
+
+gunicorn

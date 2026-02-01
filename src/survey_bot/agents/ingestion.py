@@ -135,7 +135,8 @@ class IngestionAgent:
         self.vision_api_key = vision_api_key
         self.use_vision_llm = use_vision_llm
         self.ollama_model = os.environ.get("OLLAMA_VISION_MODEL", ollama_model)
-        self.ollama_host = os.environ.get("OLLAMA_HOST", ollama_host).rstrip('/')
+        from ..llm.ollama_host import detect_ollama_host
+        self.ollama_host = ollama_host or detect_ollama_host()
         logger.debug(f"IngestionAgent initialized (vision_llm={use_vision_llm}, model={self.ollama_model})")
 
     async def extract_from_image(

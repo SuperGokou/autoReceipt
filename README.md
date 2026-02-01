@@ -60,26 +60,21 @@ playwright install
 Create a `.env` file in the project root:
 
 ```env
-# Email -- pick one method
+# Email (via Formspree -- free, no SMTP needed)
 FORMSPREE_ENDPOINT=https://formspree.io/f/your-form-id
-# or SMTP
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=you@gmail.com
-SMTP_PASSWORD=your-app-password
 
 # OCR
 TESSERACT_CMD=/usr/bin/tesseract
 
-# LLM API keys (optional)
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
+# Vision model (requires Ollama with qwen3-vl)
+OLLAMA_VISION_MODEL=qwen3-vl
+# OLLAMA_REMOTE_HOST=http://your-server:11434  # only for remote deployment
 
 # Browser
 BROWSER_HEADLESS=true
 ```
 
-See [FORMSPREE_SETUP.md](FORMSPREE_SETUP.md) or [SMTP_SETUP_GUIDE.md](SMTP_SETUP_GUIDE.md) for detailed email configuration.
+See [FORMSPREE_SETUP.md](FORMSPREE_SETUP.md) for email setup details.
 
 ### Usage
 
@@ -126,6 +121,46 @@ src/survey_bot/
   web/          # Flask app and HTML templates
   main.py       # SurveyBot orchestrator
 ```
+
+## Deployment
+
+### CI/CD
+
+The project includes GitHub Actions workflows:
+
+- **CI** (`.github/workflows/ci.yml`) -- Runs `mypy` and `pytest` on every push to `main` and on all pull requests. Tests marked `requires_llm` or `integration` are skipped in CI.
+- **Deploy** (`.github/workflows/deploy.yml`) -- Triggers a Render deploy via webhook on push to `main`.
+
+### Render
+
+The app is containerized with `Dockerfile` and configured via `render.yaml` (Render Blueprint).
+
+**Environment variables to set in Render dashboard:**
+
+| Variable | Description |
+|----------|-------------|
+| `OLLAMA_REMOTE_HOST` | URL of your remote Ollama server (e.g. `http://your-server:11434`) |
+| `FORMSPREE_ENDPOINT` | Your Formspree form endpoint for email delivery |
+
+**GitHub secret needed:**
+
+| Secret | Description |
+|--------|-------------|
+| `RENDER_DEPLOY_HOOK_URL` | Deploy hook URL from Render dashboard (Settings > Deploy Hook) |
+
+### Ollama Host Auto-Detection
+
+The app automatically detects which Ollama server to use:
+
+1. If `OLLAMA_HOST` env var is set, uses that directly
+2. If local Ollama (`localhost:11434`) is reachable, uses local
+3. Otherwise falls back to `OLLAMA_REMOTE_HOST` env var
+
+This means no configuration is needed for local development -- just have Ollama running.
+
+### Email Delivery
+
+This project uses [Formspree](https://formspree.io/) for email delivery (free tier). No SMTP server or credentials required. Coupon codes are sent to your email through the Formspree form endpoint.
 
 ## License
 

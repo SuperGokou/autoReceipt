@@ -63,7 +63,8 @@ class OptimizedVisionNavigator:
         email: Optional[str] = None,
     ):
         self.model = ollama_model or os.environ.get("OLLAMA_VISION_MODEL", "qwen3-vl")
-        self.host = ollama_host or os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        from .ollama_host import detect_ollama_host
+        self.host = ollama_host or detect_ollama_host()
         self.mood = mood
         self.email = email
         
@@ -1463,7 +1464,8 @@ async def run_optimized_navigation(
     from ..browser.interactor import PageInteractor
     
     # Pre-flight Ollama check
-    ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    from .ollama_host import detect_ollama_host_async
+    ollama_host = await detect_ollama_host_async()
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             await client.get(f"{ollama_host}/api/tags")

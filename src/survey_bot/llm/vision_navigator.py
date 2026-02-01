@@ -48,7 +48,8 @@ class VisionNavigator:
             email: Optional[str] = None,
     ):
         self.model = ollama_model or os.environ.get("OLLAMA_VISION_MODEL", "qwen3-vl")
-        self.host = ollama_host or os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        from .ollama_host import detect_ollama_host
+        self.host = ollama_host or detect_ollama_host()
         self.mood = mood
         self.email = email
 
@@ -548,7 +549,8 @@ async def run_vision_navigation(
     from ..browser.interactor import PageInteractor
 
     # Pre-flight check: Verify Ollama is running
-    ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    from .ollama_host import detect_ollama_host_async
+    ollama_host = await detect_ollama_host_async()
     ollama_model = os.environ.get("OLLAMA_VISION_MODEL", "qwen3-vl")
 
     try:

@@ -242,8 +242,12 @@ async def call_vision_llm(
     backend = await detect_backend_async()
 
     if backend == "dashscope":
+        effective_model = model or os.environ.get("DASHSCOPE_MODEL") or DASHSCOPE_MODELS[0]
+        logger.info("Vision LLM call: backend=%s, model=%s", backend, effective_model)
         return await _call_dashscope(prompt, image_b64, model, temperature, max_tokens)
     else:
+        effective_model = model or os.environ.get("OLLAMA_VISION_MODEL", "qwen3-vl")
+        logger.info("Vision LLM call: backend=%s, model=%s", backend, effective_model)
         return await _call_ollama(prompt, image_b64, model, host, temperature, max_tokens)
 
 

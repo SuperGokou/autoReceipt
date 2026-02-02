@@ -1,9 +1,21 @@
+<h1 align="center">autoReceipt</h1>
 
-# autoReceipt
+<p align="center">
+  <strong>Autonomous receipt-to-coupon pipeline powered by multi-agent AI and browser automation.</strong><br/>
+  Upload a receipt photo, and the system extracts the survey URL, completes the feedback form with a vision LLM, and delivers the coupon code to your inbox.
+</p>
 
-> Autonomous receipt-to-coupon pipeline powered by multi-agent AI and browser automation.
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10+-blue" alt="Python" />
+  <img src="https://img.shields.io/badge/Flask-3-green" alt="Flask" />
+  <img src="https://img.shields.io/badge/Playwright-Chromium-orange" alt="Playwright" />
+  <img src="https://img.shields.io/badge/Qwen3--VL-Vision_LLM-purple" alt="Qwen3-VL" />
+  <img src="https://img.shields.io/badge/Docker-Render-cyan" alt="Docker" />
+</p>
 
-[![Live Demo](https://img.shields.io/badge/Live_Demo-autoreceipt-blue?style=for-the-badge)](https://autoreceipt-ql5e.onrender.com)
+<p align="center">
+  <a href="https://autoreceipt-ql5e.onrender.com"><strong>Live Demo</strong></a>
+</p>
 
 ---
 

@@ -262,7 +262,7 @@ class FulfillmentAgent:
         result = await self._detect_from_elements(page)
         if result and result.confidence >= self.min_confidence:
             if take_screenshot:
-                result.screenshot_path = await self._take_coupon_screenshot(page, result.code)
+                result.screenshot_path = await self.take_coupon_screenshot(page, result.code)
             logger.info(f"Found coupon via element search: {result.code}")
             return result
         
@@ -270,7 +270,7 @@ class FulfillmentAgent:
         result = await self._detect_from_page_text(page)
         if result and result.confidence >= self.min_confidence:
             if take_screenshot:
-                result.screenshot_path = await self._take_coupon_screenshot(page, result.code)
+                result.screenshot_path = await self.take_coupon_screenshot(page, result.code)
             logger.info(f"Found coupon via text pattern: {result.code}")
             return result
         
@@ -278,7 +278,7 @@ class FulfillmentAgent:
         result = await self._detect_from_context(page)
         if result and result.confidence >= self.min_confidence:
             if take_screenshot:
-                result.screenshot_path = await self._take_coupon_screenshot(page, result.code)
+                result.screenshot_path = await self.take_coupon_screenshot(page, result.code)
             logger.info(f"Found coupon via context: {result.code}")
             return result
         
@@ -617,7 +617,7 @@ class FulfillmentAgent:
         
         return False
     
-    async def _take_coupon_screenshot(
+    async def take_coupon_screenshot(
         self,
         page: "Page",
         code: str,
@@ -1063,20 +1063,20 @@ Happy saving!
 """
         return html.strip()
     
-    def validate_email(self, email: str) -> bool:
+    @staticmethod
+    def validate_email(email: str) -> bool:
         """
         Validate an email address format.
-        
+
         Args:
             email: Email address to validate.
-            
+
         Returns:
             True if email format is valid.
         """
         if not email:
             return False
-        
-        # Simple regex for email validation
+
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(pattern, email))
     

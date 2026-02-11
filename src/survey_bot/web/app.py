@@ -14,16 +14,15 @@ Or with Flask:
 from __future__ import annotations
 
 import asyncio
-import base64
 import json
 import logging
 import os
 import tempfile
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from queue import Queue
 from threading import Thread
 
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
@@ -34,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 # Create Flask app
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'survey-bot-secret-key-change-in-production')
+app.secret_key = os.environ.get('SECRET_KEY') or os.urandom(32).hex()
 
 # Store for active jobs and their progress
 jobs: dict[str, dict] = {}
@@ -210,7 +209,6 @@ def stream_progress(job_id: str):
                 break
             
             # Small delay to prevent busy-waiting
-            import time
             time.sleep(0.5)
     
     return Response(
@@ -221,6 +219,10 @@ def stream_progress(job_id: str):
             'X-Accel-Buffering': 'no',
         }
     )
+
+
+# Maximum number of finished jobs to keep in memory
+MAX_FINISHED_JOBS = 100
 
 
 # =============================================================================
@@ -234,125 +236,92 @@ def update_job_progress(job_id: str, message: str):
         logger.info(f"[{job_id}] {message}")
 
 
-def run_receipt_job(job_id: str, image_path: str, mood: str, email: str, headless: bool):
-    """Run survey automation from receipt image in background thread."""
+def _cleanup_old_jobs():
+    """Remove oldest finished jobs when the limit is exceeded."""
+    finished = [
+        (jid, j) for jid, j in jobs.items()
+        if j['status'] in ('completed', 'failed')
+    ]
+    if len(finished) > MAX_FINISHED_JOBS:
+        finished.sort(key=lambda x: x[1].get('created_at', ''))
+        for jid, _ in finished[:len(finished) - MAX_FINISHED_JOBS]:
+            del jobs[jid]
+
+
+def _finalize_job(job_id: str, result):
+    """Process a SurveyResult and update the job dict."""
+    if result.success:
+        jobs[job_id]['status'] = 'completed'
+        jobs[job_id]['result'] = {
+            'success': True,
+            'coupon_code': result.coupon.code if result.coupon else None,
+            'email_sent': result.email_sent,
+            'steps_taken': result.steps_taken,
+            'duration': result.duration_seconds,
+            'survey_url': result.survey_url,
+        }
+        update_job_progress(job_id, f"[SUCCESS] Coupon: {result.coupon.code if result.coupon else 'N/A'}")
+    else:
+        jobs[job_id]['status'] = 'failed'
+        jobs[job_id]['error'] = result.error_message
+        update_job_progress(job_id, f"[FAILED] {result.error_message}")
+    _cleanup_old_jobs()
+
+
+def _run_job(job_id: str, coro, init_message: str, cleanup_path: Optional[str] = None):
+    """Generic job runner for background threads."""
     try:
         jobs[job_id]['status'] = 'running'
-        update_job_progress(job_id, "Processing receipt image...")
-        
-        # Create event loop for async operations
+        update_job_progress(job_id, init_message)
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         try:
-            # Create bot with custom progress callback
             SurveyBot = get_bot()
             bot = SurveyBot(
                 verbose=True,
-                headless=headless,
-                use_vision=True,  # Use Qwen3-VL for smart navigation
+                headless=True,
+                use_vision=True,
                 progress_callback=lambda stage, msg: update_job_progress(job_id, f"{msg}"),
             )
-            
-            # Run the survey
+
             update_job_progress(job_id, "Starting survey automation...")
-            result = loop.run_until_complete(
-                bot.run(
-                    image_path=image_path,
-                    mood=mood,
-                    email=email,
-                )
-            )
-            
-            # Process result
-            if result.success:
-                jobs[job_id]['status'] = 'completed'
-                jobs[job_id]['result'] = {
-                    'success': True,
-                    'coupon_code': result.coupon.code if result.coupon else None,
-                    'email_sent': result.email_sent,
-                    'steps_taken': result.steps_taken,
-                    'duration': result.duration_seconds,
-                    'survey_url': result.survey_url,
-                }
-                update_job_progress(job_id, f"[SUCCESS] Coupon: {result.coupon.code if result.coupon else 'N/A'}")
-            else:
-                jobs[job_id]['status'] = 'failed'
-                jobs[job_id]['error'] = result.error_message
-                update_job_progress(job_id, f"[FAILED] {result.error_message}")
-                
+            result = loop.run_until_complete(coro(bot))
+            _finalize_job(job_id, result)
         finally:
             loop.close()
-            
-            # Cleanup temp file
-            try:
-                Path(image_path).unlink(missing_ok=True)
-                Path(image_path).parent.rmdir()
-            except Exception:
-                pass
-                
+            if cleanup_path:
+                try:
+                    Path(cleanup_path).unlink(missing_ok=True)
+                    Path(cleanup_path).parent.rmdir()
+                except Exception:
+                    pass
+
     except Exception as e:
         logger.exception(f"Error in job {job_id}")
         jobs[job_id]['status'] = 'failed'
         jobs[job_id]['error'] = str(e)
         update_job_progress(job_id, f"[ERROR] {str(e)}")
+
+
+def run_receipt_job(job_id: str, image_path: str, mood: str, email: str, headless: bool):
+    """Run survey automation from receipt image in background thread."""
+    _run_job(
+        job_id,
+        coro=lambda bot: bot.run(image_path=image_path, mood=mood, email=email),
+        init_message="Processing receipt image...",
+        cleanup_path=image_path,
+    )
 
 
 def run_direct_url_job(job_id: str, survey_url: str, mood: str, email: str, headless: bool):
     """Run survey automation with direct URL in background thread."""
-    try:
-        jobs[job_id]['status'] = 'running'
-        update_job_progress(job_id, f"Using direct URL: {survey_url[:50]}...")
-        
-        # Create event loop for async operations
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        try:
-            # Create bot with custom progress callback
-            SurveyBot = get_bot()
-            bot = SurveyBot(
-                verbose=True,
-                headless=headless,
-                use_vision=True,  # Use Qwen3-VL for smart navigation
-                progress_callback=lambda stage, msg: update_job_progress(job_id, f"{msg}"),
-            )
-            
-            # Run the survey
-            update_job_progress(job_id, "Starting survey automation...")
-            result = loop.run_until_complete(
-                bot.run_with_url(
-                    survey_url=survey_url,
-                    mood=mood,
-                    email=email,
-                )
-            )
-            
-            # Process result
-            if result.success:
-                jobs[job_id]['status'] = 'completed'
-                jobs[job_id]['result'] = {
-                    'success': True,
-                    'coupon_code': result.coupon.code if result.coupon else None,
-                    'email_sent': result.email_sent,
-                    'steps_taken': result.steps_taken,
-                    'duration': result.duration_seconds,
-                    'survey_url': result.survey_url,
-                }
-                update_job_progress(job_id, f"[SUCCESS] Coupon: {result.coupon.code if result.coupon else 'N/A'}")
-            else:
-                jobs[job_id]['status'] = 'failed'
-                jobs[job_id]['error'] = result.error_message
-                update_job_progress(job_id, f"[FAILED] {result.error_message}")
-                
-        finally:
-            loop.close()
-                
-    except Exception as e:
-        logger.exception(f"Error in job {job_id}")
-        jobs[job_id]['status'] = 'failed'
-        jobs[job_id]['error'] = str(e)
-        update_job_progress(job_id, f"[ERROR] {str(e)}")
+    _run_job(
+        job_id,
+        coro=lambda bot: bot.run_with_url(survey_url=survey_url, mood=mood, email=email),
+        init_message=f"Using direct URL: {survey_url[:50]}...",
+    )
 
 
 # =============================================================================

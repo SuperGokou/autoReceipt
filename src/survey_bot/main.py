@@ -44,7 +44,7 @@ from .agents.formspree_sender import FormspreeSender
 from .browser.launcher import BrowserManager
 from .llm.graph import run_survey_navigation
 from .llm.optimized_navigator import run_optimized_navigation
-from .models.survey_result import SurveyResult, CouponResult
+from .models.survey_result import SurveyResult, CouponResult, CouponPattern, ExtractionMethod
 from .models.receipt import ReceiptData
 
 
@@ -286,7 +286,6 @@ class SurveyBot:
                     # PRIORITY 1: Check if navigation already found a coupon code
                     # This is more reliable than text pattern matching
                     if nav_state and nav_state.get('coupon_code'):
-                        from .models.survey_result import CouponPattern, ExtractionMethod
                         coupon_code_from_nav: str = nav_state.get('coupon_code', '')
                         if coupon_code_from_nav:
                             logger.info(f"Using coupon from navigation: {coupon_code_from_nav}")
@@ -297,7 +296,7 @@ class SurveyBot:
                                 extraction_method=ExtractionMethod.ELEMENT_SEARCH,
                             )
                             # Still take a screenshot for proof
-                            screenshot_path = await self.fulfillment_agent._take_coupon_screenshot(page, coupon_code_from_nav)
+                            screenshot_path = await self.fulfillment_agent.take_coupon_screenshot(page, coupon_code_from_nav)
                             coupon_result.screenshot_path = screenshot_path
                         else:
                             coupon_result = None
@@ -399,7 +398,6 @@ class SurveyBot:
                             self.progress.success(f"Survey completed! Coupon will be emailed to {email}")
                             
                             # Create a placeholder result
-                            from .models.survey_result import CouponPattern, ExtractionMethod
                             coupon_result = CouponResult(
                                 code="EMAILED",
                                 confidence=0.5,
@@ -684,7 +682,7 @@ def run(
     # Show configuration
     if verbose:
         click.echo(f"[Image] Image: {image}")
-        click.echo(f"[Mood]Mood: {mood}")
+        click.echo(f"[Mood] Mood: {mood}")
         click.echo(f"Email: {email}")
         click.echo(f"[Mode] Headless: {headless}")
         click.echo()
@@ -862,9 +860,7 @@ def web(port: int, debug: bool):
 
 def _is_valid_email(email: str) -> bool:
     """Validate email format."""
-    import re
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return bool(re.match(pattern, email))
+    return FulfillmentAgent.validate_email(email)
 
 
 def run_cli():

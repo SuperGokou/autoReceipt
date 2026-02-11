@@ -251,7 +251,7 @@ class PageInteractor:
                                 code_inputs.append(inp)
                             elif "code" in name.lower() or "digit" in name.lower():
                                 code_inputs.append(inp)
-                    except:
+                    except Exception:
                         continue
                 
                 if len(code_inputs) >= 4:

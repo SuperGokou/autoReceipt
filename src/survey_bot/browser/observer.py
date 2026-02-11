@@ -644,7 +644,7 @@ class PageObserver:
                     element = page.locator(selector).first
                     if await element.is_visible():
                         text = await element.inner_text()
-                        if text and len(text) > 10 and "?" in text or len(text) > 20:
+                        if text and (len(text) > 10 and "?" in text or len(text) > 20):
                             return text.strip()[:500]
                 except Exception:
                     continue

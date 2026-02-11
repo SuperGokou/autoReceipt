@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import io
 import logging
 import os
+import random
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -73,7 +75,11 @@ class OptimizedVisionNavigator:
             "neutral": {"scale_10": "5", "scale_5": "3", "satisfaction": "Neither", "likelihood": "Maybe"},
             "angry": {"scale_10": "1", "scale_5": "1", "satisfaction": "Highly Dissatisfied", "likelihood": "Never"},
         }.get(mood, {})
-        
+
+        # Tracking state for multi-question pages
+        self._expected_statement_count: dict[str, int] = {}
+        self._statement_clicks: dict[str, int] = {}
+
         logger.info(f"OptimizedVisionNavigator: model={self.model}, mood={mood}")
     
     async def analyze_and_act(self, page, step: int = 0, retry_count: int = 0) -> PageAnalysis:
@@ -259,7 +265,6 @@ class OptimizedVisionNavigator:
             body_lower = body_text.lower()
 
             # Check progress indicator
-            import re
             progress_match = re.search(r'(\d+)\s*%', body_text)
             progress_value = int(progress_match.group(1)) if progress_match else 0
 
@@ -353,7 +358,6 @@ class OptimizedVisionNavigator:
             ]
             
             # Check if page has a visible code (6+ digits together)
-            import re
             visible_code = re.search(r'\b(\d{6,12})\b', body_text)
             
             # Strong completion: specific phrase + visible code
@@ -389,13 +393,9 @@ class OptimizedVisionNavigator:
                 if "describes me" in body_lower or "prefer" in body_lower:
                     # Check if there are multiple pairs of statements on the same page
                     # Count how many "Statement A" mentions there are (indicates multiple questions)
-                    import re
                     statement_a_count = len(re.findall(r'statement\s+a', body_lower))
 
                     # Store the expected count for later validation
-                    if not hasattr(self, '_expected_statement_count'):
-                        self._expected_statement_count = {}
-
                     # Use URL as key to track per-page
                     page_key = page.url.split('?')[0]  # Remove query params
                     self._expected_statement_count[page_key] = statement_a_count
@@ -488,10 +488,10 @@ class OptimizedVisionNavigator:
                 # Sliders are typically for rating retailers/brands on a scale
                 # For happy mood, set sliders to high values (9-10 out of 10)
                 # For sad mood, set to low values (1-3 out of 10)
-                if self.user_mood == "happy":
+                if self.mood == "happy":
                     slider_value = 9  # High rating for happy mood
-                elif self.user_mood == "sad":
-                    slider_value = 2  # Low rating for sad mood
+                elif self.mood == "angry":
+                    slider_value = 2  # Low rating for angry mood
                 else:
                     slider_value = 7  # Neutral/default
 
@@ -693,7 +693,6 @@ class OptimizedVisionNavigator:
 
     def _generate_comment(self) -> str:
         """Generate a mood-appropriate comment for textarea fields."""
-        import random
 
         if self.mood == "happy":
             comments = [
@@ -918,8 +917,6 @@ NOW SCAN THE ENTIRE PAGE, FIND ALL UNANSWERED QUESTIONS, AND LIST ALL ACTIONS:""
                         logger.info(f"[ACTION SUCCESS {i+1}] Clicked: {action.target}")
                         # Track statement comparison clicks
                         if "statement" in action.target.lower():
-                            if not hasattr(self, '_statement_clicks'):
-                                self._statement_clicks = {}
                             page_key = page.url.split('?')[0]
                             self._statement_clicks[page_key] = self._statement_clicks.get(page_key, 0) + 1
                         await asyncio.sleep(0.2)
@@ -931,8 +928,8 @@ NOW SCAN THE ENTIRE PAGE, FIND ALL UNANSWERED QUESTIONS, AND LIST ALL ACTIONS:""
 
         # Check if we've answered enough statement comparison questions before clicking Next
         page_key = page.url.split('?')[0]
-        expected_count = getattr(self, '_expected_statement_count', {}).get(page_key, 0)
-        actual_count = getattr(self, '_statement_clicks', {}).get(page_key, 0)
+        expected_count = self._expected_statement_count.get(page_key, 0)
+        actual_count = self._statement_clicks.get(page_key, 0)
 
         if expected_count > 0 and actual_count < expected_count:
             logger.warning(f"[STATEMENT CHECK] Answered {actual_count}/{expected_count} statement questions - need more answers before Next")
@@ -958,10 +955,8 @@ NOW SCAN THE ENTIRE PAGE, FIND ALL UNANSWERED QUESTIONS, AND LIST ALL ACTIONS:""
             if next_clicked:
                 logger.info("[NEXT SUCCESS] Clicked Next button")
                 # Reset counters for this page when we successfully move forward
-                if page_key in getattr(self, '_statement_clicks', {}):
-                    del self._statement_clicks[page_key]
-                if page_key in getattr(self, '_expected_statement_count', {}):
-                    del self._expected_statement_count[page_key]
+                self._statement_clicks.pop(page_key, None)
+                self._expected_statement_count.pop(page_key, None)
             else:
                 logger.warning("[NEXT FAILED] No Next button found or click failed")
                 return False
@@ -1511,14 +1506,13 @@ async def run_optimized_navigation(
             # Get page content hash to detect changes even if URL stays same
             try:
                 body_text = await page.inner_text("body")
-                import hashlib
                 current_page_hash = hashlib.md5(body_text.encode()).hexdigest()
             except Exception:
                 current_page_hash = None
 
             # Check if we're making progress on statement questions
             page_key = current_url.split('?')[0]
-            current_statement_count = getattr(navigator, '_statement_clicks', {}).get(page_key, 0)
+            current_statement_count = navigator._statement_clicks.get(page_key, 0)
 
             # Check if stuck on same page
             if current_url == last_url:
